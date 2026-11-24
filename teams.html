@@ -174,7 +174,10 @@
       const members = new Map();
       Object.entries(d.members && typeof d.members === "object" ? d.members : {})
         .forEach(([n, t]) => members.set(n, tsMillis(t)));
-      Object.values(done).forEach(v => { if (v && v.by && !members.has(v.by)) members.set(String(v.by), 0); });
+      // ("Someone" is what the board records when a player hasn't typed a name)
+      Object.values(done).forEach(v => {
+        if (v && v.by && v.by !== "Someone" && !members.has(v.by)) members.set(String(v.by), 0);
+      });
       return {
         id, name, order: d.order, done, doneSet,
         inLine: new Set(lines.flat()),
