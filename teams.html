@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OSRS Bingo – Teams</title>
+  <style>
+    :root {
+      --bg-dark: #120f0c;
+      --panel-bg: #211b14;
+      --tile-bg: #2e261d;
+      --tile-done: #184426;
+      --tile-done-border: #38a158;
+      --gold: #e6b84c;
+      --gold-dim: #8c6d28;
+      --ice: #7cc6fe;
+      --text-main: #f3e8d2;
+      --text-muted: #b8a88a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Trebuchet MS", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at top, #1f2429, var(--bg-dark) 75%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px 40px;
+    }
+
+    header { text-align: center; max-width: 900px; margin-bottom: 18px; }
+    h1 {
+      font-size: clamp(1.5rem, 4vw, 2.3rem);
+      color: var(--gold);
+      text-shadow: 2px 2px 0 #000;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .subtitle { color: var(--text-muted); font-size: 0.92rem; }
+    .nav-link { color: var(--ice); font-weight: bold; text-decoration: none; }
+    .nav-link:hover { text-decoration: underline; }
+
+    .status { color: var(--gold); font-size: 0.9rem; margin-bottom: 14px; text-align: center; min-height: 1.2em; }
+    .status.error { color: #ff9b9b; }
+
+    .teams {
+      width: min(1100px, 100%);
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    .team {
+      background: var(--panel-bg);
+      border: 2px solid var(--gold-dim);
+      border-radius: 10px;
+      padding: 12px 14px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .team.leader { border-color: var(--gold); }
+
+    .team-head { display: flex; align-items: center; gap: 10px; }
+    .rank { font-weight: bold; color: var(--gold); font-size: 1.1rem; min-width: 1.6em; }
+    .team-name { flex: 1; min-width: 0; font-weight: bold; font-size: 1.05rem; overflow-wrap: anywhere; }
+    .team-name.unnamed { color: var(--text-muted); font-style: italic; font-weight: normal; }
+
+    .open-btn {
+      background: linear-gradient(180deg, #2c7a43, #1b5230);
+      border: 1px solid #5cd67a;
+      color: #fff;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-weight: bold;
+      font-size: 0.8rem;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .open-btn:hover { filter: brightness(1.12); }
+
+    .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.85rem; font-weight: bold; }
+    .stats span span { color: var(--gold); }
+    .stats .when { color: var(--text-muted); font-weight: normal; }
+
+    .mini {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      background: #1a1510;
+      border: 1px solid #594a38;
+      border-radius: 7px;
+      padding: 6px;
+    }
+    .cell {
+      aspect-ratio: 1;
+      background: var(--tile-bg);
+      border: 1px solid #594a38;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-size: 0.62rem;
+      font-weight: bold;
+      color: #e8fff0;
+    }
+    .cell img { width: 70%; height: 70%; object-fit: contain; opacity: 0.45; }
+    .cell.done { background: var(--tile-done); border-color: var(--tile-done-border); }
+    .cell.done img { opacity: 1; }
+    .cell.in-line { box-shadow: 0 0 0 2px var(--gold) inset; }
+
+    .members { font-size: 0.8rem; color: var(--text-muted); line-height: 1.6; }
+    .chip {
+      display: inline-block;
+      background: #1b2027;
+      border: 1px solid #3b5a78;
+      color: var(--text-main);
+      border-radius: 10px;
+      padding: 0 8px;
+      margin: 0 4px 4px 0;
+      font-size: 0.78rem;
+    }
+
+    .empty { color: var(--text-muted); text-align: center; grid-column: 1 / -1; padding: 30px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OSRS Bingo – Teams</h1>
+    <p class="subtitle">Every team's board, live. <a class="nav-link" href="index.html">← Back to the board</a></p>
+  </header>
+
+  <div class="status" id="status" role="status">Loading teams…</div>
+  <div class="teams" id="teams"></div>
+
+  <script src="shared.js"></script>
+  <script>
+    const FREE = "free";
+    const TILE = Object.fromEntries(TILES.map(t => [t.id, t]));
+
+    // 12 winning lines: 5 rows, 5 cols, 2 diagonals (board positions 0–24)
+    const LINES = [];
+    for (let i = 0; i < 5; i++) {
+      LINES.push([0, 1, 2, 3, 4].map(c => i * 5 + c));
+      LINES.push([0, 1, 2, 3, 4].map(r => r * 5 + i));
+    }
+    LINES.push([0, 6, 12, 18, 24], [4, 8, 12, 16, 20]);
+
+    const validOrder = o => Array.isArray(o) && o.length === 25 && o.every(id => id in TILE);
+    const tsMillis = t => (t && typeof t.toMillis === "function" ? t.toMillis() : 0);
+
+    function ago(ms) {
+      if (!ms) return "no activity yet";
+      const s = Math.max(0, (Date.now() - ms) / 1000);
+      if (s < 60) return "just now";
+      if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)} hr ago`;
+      return `${Math.floor(s / 86400)} days ago`;
+    }
+
+    // Turn one team document into what the card shows
+    function summarise(id, d) {
+      const done = d.done && typeof d.done === "object" ? d.done : {};
+      const doneSet = new Set([...Object.keys(done).filter(t => d.order.includes(t)), FREE]);
+      const lines = LINES.filter(l => l.every(p => doneSet.has(d.order[p])));
+      // Old teams used their code as the document id; newer ones store their name
+      const name = typeof d.name === "string" && d.name ? d.name : (id.startsWith("t-") ? null : id);
+      // Members: everyone who joined, plus anyone who ticked a tile before member lists existed
+      const members = new Map();
+      Object.entries(d.members && typeof d.members === "object" ? d.members : {})
+        .forEach(([n, t]) => members.set(n, tsMillis(t)));
+      Object.values(done).forEach(v => { if (v && v.by && !members.has(v.by)) members.set(String(v.by), 0); });
+      return {
+        id, name, order: d.order, done, doneSet,
+        inLine: new Set(lines.flat()),
+        tiles: doneSet.size, bingos: lines.length,
+        updated: tsMillis(d.updated),
+        members: [...members.keys()].map(n => n.slice(0, 24)).sort((a, b) => a.localeCompare(b))
+      };
+    }
+
+    function cellImg(name) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.loading = "lazy";
+      img.src = "https://oldschool.runescape.wiki/images/" + name + ".png";
+      img.onerror = () => img.remove();
+      return img;
+    }
+
+    function render(teams) {
+      const box = document.getElementById("teams");
+      box.textContent = "";
+      if (!teams.length) {
+        const p = document.createElement("p");
+        p.className = "empty";
+        p.textContent = "No teams yet. Join or create one from the board page.";
+        box.appendChild(p);
+        return;
+      }
+      teams.sort((a, b) => b.bingos - a.bingos || b.tiles - a.tiles || b.updated - a.updated);
+
+      teams.forEach((t, i) => {
+        const card = document.createElement("section");
+        card.className = "team" + (i === 0 && t.tiles > 1 ? " leader" : "");
+
+        const head = document.createElement("div");
+        head.className = "team-head";
+        const rank = document.createElement("div");
+        rank.className = "rank";
+        rank.textContent = `#${i + 1}`;
+        const nm = document.createElement("div");
+        nm.className = "team-name" + (t.name ? "" : " unnamed");
+        nm.textContent = t.name || "Unnamed team (rejoin it once to show its name)";
+        head.append(rank, nm);
+        if (t.name) {
+          const open = document.createElement("a");
+          open.className = "open-btn";
+          open.href = "index.html?team=" + encodeURIComponent(t.name);
+          open.textContent = "Open board";
+          head.appendChild(open);
+        }
+
+        const stats = document.createElement("div");
+        stats.className = "stats";
+        const stat = (label, val) => {
+          const s = document.createElement("span");
+          s.append(label + " ");
+          const v = document.createElement("span");
+          v.textContent = val;
+          s.appendChild(v);
+          return s;
+        };
+        const when = document.createElement("span");
+        when.className = "when";
+        when.textContent = "Last tick " + ago(t.updated);
+        stats.append(stat("Tiles", `${t.tiles} / 25`), stat("Bingos", `${t.bingos} / 12`), when);
+
+        const mini = document.createElement("div");
+        mini.className = "mini";
+        t.order.forEach((id, pos) => {
+          const tile = TILE[id];
+          const cell = document.createElement("div");
+          const isDone = t.doneSet.has(id);
+          cell.className = "cell" + (isDone ? " done" : "") + (t.inLine.has(pos) ? " in-line" : "");
+          if (tile.free) cell.textContent = "FREE";
+          else cell.appendChild(cellImg(tile.img));
+          const by = !tile.free && t.done[id] && t.done[id].by;
+          cell.title = tile.free ? "Free space" : tile.title + (isDone ? ` – done${by ? " by " + by : ""}` : "");
+          mini.appendChild(cell);
+        });
+
+        const mem = document.createElement("div");
+        mem.className = "members";
+        if (t.members.length) {
+          mem.append("Members: ");
+          t.members.forEach(n => {
+            const c = document.createElement("span");
+            c.className = "chip";
+            c.textContent = n;
+            mem.appendChild(c);
+          });
+        } else {
+          mem.textContent = "No members recorded yet.";
+        }
+
+        card.append(head, stats, mini, mem);
+        box.appendChild(card);
+      });
+    }
+
+    function setStatus(text, isError) {
+      const el = document.getElementById("status");
+      el.className = "status" + (isError ? " error" : "");
+      el.textContent = text;
+    }
+
+    (async () => {
+      if (!FIREBASE_CONFIG) { setStatus("Team sync isn't set up: the Firebase config is missing.", true); return; }
+      try {
+        const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
+        const appMod = await import(base + "firebase-app.js");
+        const fs = await import(base + "firebase-firestore.js");
+        const db = fs.getFirestore(appMod.initializeApp(FIREBASE_CONFIG));
+        let latest = [];
+        // Live: any tick on any team updates this page
+        fs.onSnapshot(fs.collection(db, "rooms"), snap => {
+          latest = [];
+          snap.forEach(doc => {
+            const d = doc.data();
+            if (validOrder(d.order)) latest.push(summarise(doc.id, d));
+          });
+          setStatus(`${latest.length} team${latest.length === 1 ? "" : "s"} · updates live`);
+          render(latest);
+        }, e => {
+          setStatus(e && e.code === "permission-denied"
+            ? "The overview isn't allowed to list teams yet: the Firebase rules need updating."
+            : "Couldn't load teams: " + ((e && (e.code || e.message)) || e), true);
+        });
+        // Keep the "last tick … ago" times fresh
+        setInterval(() => render(latest), 60000);
+      } catch (e) {
+        setStatus("Couldn't load team sync: " + (e.message || e), true);
+      }
+    })();
+  </script>
+</body>
+</html>
