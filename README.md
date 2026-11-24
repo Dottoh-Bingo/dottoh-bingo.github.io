@@ -1,0 +1,2 @@
+# osrsBingo
+osrs bingo site
