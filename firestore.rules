@@ -2,11 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // One document per team board: rooms/<id from the team name>
-    // Teams are open: anyone can list and read them (the overview page) and tick tiles.
-    // Nobody can delete a team.
+    // Teams are open: anyone can list and read them (the overview page), tick tiles,
+    // and delete a team (the overview page asks them to type its name first).
     match /rooms/{room} {
       allow get, list: if true;
-      allow delete: if false;
+      allow delete: if room.matches('^[a-z0-9-]{12,40}$');
       allow create, update: if room.matches('^[a-z0-9-]{12,40}$')
         && request.resource.data.keys().hasOnly(['order', 'done', 'updated', 'name', 'members'])
         && request.resource.data.order is list

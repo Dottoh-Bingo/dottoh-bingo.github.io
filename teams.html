@@ -127,6 +127,61 @@
     }
 
     .empty { color: var(--text-muted); text-align: center; grid-column: 1 / -1; padding: 30px; }
+
+    .del-btn {
+      background: linear-gradient(180deg, #a82828, #7a1b1b);
+      border: 1px solid #d45b5b;
+      color: #fff;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font: inherit;
+      font-weight: bold;
+      font-size: 0.8rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .del-btn:hover { filter: brightness(1.12); }
+    .del-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+
+    /* ---- Delete confirmation ---- */
+    dialog {
+      margin: auto;
+      max-width: min(440px, 92vw);
+      background: var(--panel-bg);
+      color: var(--text-main);
+      border: 2px solid #d45b5b;
+      border-radius: 10px;
+      padding: 18px 20px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8);
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+    dialog h2 { color: #ff9b9b; font-size: 1.15rem; margin-bottom: 10px; }
+    dialog p { font-size: 0.88rem; line-height: 1.45; margin-bottom: 10px; color: var(--text-muted); }
+    dialog p b { color: var(--text-main); }
+    dialog input {
+      width: 100%;
+      font: inherit;
+      font-size: 0.9rem;
+      background: #15110d;
+      color: var(--text-main);
+      border: 1px solid var(--gold-dim);
+      border-radius: 5px;
+      padding: 6px 8px;
+      margin-bottom: 14px;
+    }
+    .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .cancel-btn {
+      background: linear-gradient(180deg, #4a3e2f, #332a1f);
+      border: 1px solid var(--gold-dim);
+      color: var(--text-main);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font: inherit;
+      font-weight: bold;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .dlg-error { color: #ff9b9b; font-size: 0.82rem; min-height: 1.2em; margin-bottom: 8px; }
   </style>
 </head>
 <body>
@@ -137,6 +192,19 @@
 
   <div class="status" id="status" role="status">Loading teams…</div>
   <div class="teams" id="teams"></div>
+
+  <dialog id="delDialog" aria-labelledby="delTitle">
+    <h2 id="delTitle">Delete this team?</h2>
+    <p>This permanently deletes <b id="delName"></b>: its board, every ticked tile and its member list,
+      for everyone on the team. It can't be undone.</p>
+    <p>To confirm, type <b id="delWord"></b> below.</p>
+    <input id="delInput" type="text" spellcheck="false" autocomplete="off" aria-label="Type to confirm" />
+    <div class="dlg-error" id="delError" role="alert"></div>
+    <div class="dlg-actions">
+      <button class="cancel-btn" id="delCancel" type="button">Cancel</button>
+      <button class="del-btn" id="delConfirm" type="button" disabled>Delete team</button>
+    </div>
+  </dialog>
 
   <script src="shared.js"></script>
   <script>
@@ -228,6 +296,13 @@
           open.textContent = "Open board";
           head.appendChild(open);
         }
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "del-btn";
+        del.textContent = "Delete";
+        del.setAttribute("aria-label", "Delete team " + (t.name || "(unnamed)"));
+        del.addEventListener("click", () => askDelete(t));
+        head.appendChild(del);
 
         const stats = document.createElement("div");
         stats.className = "stats";
@@ -283,13 +358,59 @@
       el.textContent = text;
     }
 
+    // ---- Deleting a team: the person must type the team's name (or "delete" if it has none) ----
+    let fs = null, db = null;   // Firestore module + database, set once loaded
+    let pendingDelete = null;   // the team the dialog is asking about
+    const dlg = document.getElementById("delDialog");
+    const delInput = document.getElementById("delInput");
+    const delConfirm = document.getElementById("delConfirm");
+    const delError = document.getElementById("delError");
+    const confirmWord = t => t.name || "delete";
+
+    function askDelete(t) {
+      pendingDelete = t;
+      document.getElementById("delName").textContent = t.name ? `team "${t.name}"` : "this unnamed team";
+      document.getElementById("delWord").textContent = confirmWord(t);
+      delInput.value = "";
+      delError.textContent = "";
+      delConfirm.disabled = true;
+      delConfirm.textContent = "Delete team";
+      dlg.showModal();
+      delInput.focus();
+    }
+
+    delInput.addEventListener("input", () => {
+      delConfirm.disabled = !pendingDelete || delInput.value.trim().toLowerCase() !== confirmWord(pendingDelete).toLowerCase();
+    });
+    delInput.addEventListener("keydown", e => { if (e.key === "Enter" && !delConfirm.disabled) delConfirm.click(); });
+    document.getElementById("delCancel").addEventListener("click", () => dlg.close());
+    dlg.addEventListener("close", () => { pendingDelete = null; });
+
+    delConfirm.addEventListener("click", async () => {
+      const t = pendingDelete;
+      if (!t || !fs) return;
+      delConfirm.disabled = true;
+      delConfirm.textContent = "Deleting…";
+      try {
+        await fs.deleteDoc(fs.doc(db, "rooms", t.id));
+        dlg.close();
+        setStatus(`Deleted ${t.name ? `team "${t.name}"` : "the unnamed team"}.`);
+      } catch (e) {
+        delConfirm.textContent = "Delete team";
+        delConfirm.disabled = false;
+        delError.textContent = e && e.code === "permission-denied"
+          ? "Firebase refused: the rules don't allow deleting teams yet."
+          : "Couldn't delete: " + ((e && (e.code || e.message)) || e);
+      }
+    });
+
     (async () => {
       if (!FIREBASE_CONFIG) { setStatus("Team sync isn't set up: the Firebase config is missing.", true); return; }
       try {
         const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
         const appMod = await import(base + "firebase-app.js");
-        const fs = await import(base + "firebase-firestore.js");
-        const db = fs.getFirestore(appMod.initializeApp(FIREBASE_CONFIG));
+        fs = await import(base + "firebase-firestore.js");
+        db = fs.getFirestore(appMod.initializeApp(FIREBASE_CONFIG));
         let latest = [];
         // Live: any tick on any team updates this page
         fs.onSnapshot(fs.collection(db, "rooms"), snap => {
