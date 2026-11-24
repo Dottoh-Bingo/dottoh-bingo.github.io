@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OSRS Christmas PvM Bingo</title>
+  <style>
+    :root {
+      --bg-dark: #120f0c;
+      --panel-bg: #211b14;
+      --tile-bg: #2e261d;
+      --tile-hover: #3d3226;
+      --tile-done: #184426;
+      --tile-done-border: #38a158;
+      --gold: #e6b84c;
+      --gold-dim: #8c6d28;
+      --crimson: #a82828;
+      --ice: #7cc6fe;
+      --text-main: #f3e8d2;
+      --text-muted: #b8a88a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Trebuchet MS", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at top, #1f2429, var(--bg-dark) 75%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px 40px;
+    }
+
+    header { text-align: center; max-width: 780px; margin-bottom: 14px; }
+
+    h1 {
+      font-size: clamp(1.5rem, 4vw, 2.3rem);
+      color: var(--gold);
+      text-shadow: 2px 2px 0 #000;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .subtitle { color: var(--text-muted); font-size: 0.92rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      align-items: center;
+      justify-content: center;
+      background: var(--panel-bg);
+      border: 2px solid var(--gold-dim);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      max-width: 780px;
+    }
+
+    .stat { font-size: 0.92rem; font-weight: bold; }
+    .stat span { color: var(--gold); }
+
+    button.ctrl-btn {
+      background: linear-gradient(180deg, var(--crimson), #7a1b1b);
+      color: #fff;
+      border: 1px solid #d45b5b;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 0.86rem;
+      font-family: inherit;
+    }
+
+    button.ctrl-btn.secondary {
+      background: linear-gradient(180deg, #4a3e2f, #332a1f);
+      border-color: var(--gold-dim);
+      color: var(--text-main);
+    }
+
+    button.ctrl-btn.green {
+      background: linear-gradient(180deg, #2c7a43, #1b5230);
+      border-color: #5cd67a;
+    }
+
+    button.ctrl-btn:hover { filter: brightness(1.12); }
+
+    .board-wrap { max-width: 100%; overflow-x: auto; }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(110px, 148px));
+      gap: 8px;
+      background: var(--panel-bg);
+      padding: 12px;
+      border: 3px solid var(--gold-dim);
+      border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+    }
+
+    .tile {
+      font: inherit;
+      min-height: 125px;
+      background: var(--tile-bg);
+      border: 2px solid #594a38;
+      border-radius: 7px;
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+      color: var(--text-main);
+    }
+
+    .tile:hover {
+      background: var(--tile-hover);
+      border-color: var(--gold);
+      transform: translateY(-2px);
+    }
+
+    .tile-img {
+      width: 100%;
+      height: 64px;
+      object-fit: contain;
+      margin-bottom: 6px;
+      filter: drop-shadow(2px 3px 2px rgba(0, 0, 0, 0.7));
+      pointer-events: none;
+    }
+    .tile-title { font-size: 0.86rem; font-weight: bold; line-height: 1.2; color: var(--gold); }
+    .tile.completed .tile-title { color: #e8fff0; }
+    .tile-hrs { margin-top: 4px; font-size: 0.68rem; color: var(--ice); opacity: 0.85; }
+
+    .tile.completed {
+      background: var(--tile-done);
+      border-color: var(--tile-done-border);
+      color: #e8fff0;
+      box-shadow: inset 0 0 14px rgba(56, 161, 88, 0.45);
+    }
+
+    .tile.completed::after {
+      content: "✓";
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #7ef59b;
+    }
+
+    .tile.in-line {
+      border-color: var(--gold);
+      box-shadow: inset 0 0 14px rgba(56, 161, 88, 0.45), 0 0 10px rgba(230, 184, 76, 0.55);
+    }
+
+    .tile.free-space { border-style: dashed; border-color: var(--gold); }
+
+    .tooltip {
+      position: fixed;
+      z-index: 50;
+      max-width: 250px;
+      background: #1a1510;
+      border: 2px solid var(--gold);
+      border-radius: 7px;
+      padding: 8px 10px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.75);
+      pointer-events: none;
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+    .tooltip-title { color: var(--gold); font-weight: bold; margin-bottom: 3px; }
+    .tooltip-sub { color: var(--text-main); }
+    .tooltip-hrs { color: var(--ice); margin-top: 4px; font-size: 0.74rem; }
+    .tooltip-src { color: var(--text-muted); margin-top: 2px; font-size: 0.72rem; }
+
+    .bingo-banner {
+      margin-top: 16px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      background: rgba(24, 68, 38, 0.95);
+      border: 2px solid #5cd67a;
+      color: #eafff0;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .status-msg {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: var(--gold);
+      min-height: 1.2em;
+      text-align: center;
+    }
+
+    /* ---- Board code ---- */
+    .code-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 14px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .code-row input {
+      font-family: Consolas, monospace;
+      font-size: 0.8rem;
+      width: min(420px, 80vw);
+      background: #15110d;
+      color: var(--text-main);
+      border: 1px solid var(--gold-dim);
+      border-radius: 5px;
+      padding: 5px 8px;
+    }
+
+    /* ---- Tile pool panel ---- */
+    .pool {
+      margin-top: 18px;
+      width: min(780px, 100%);
+      background: var(--panel-bg);
+      border: 2px solid var(--gold-dim);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .pool > summary {
+      cursor: pointer;
+      font-weight: bold;
+      color: var(--gold);
+      font-size: 0.95rem;
+    }
+    .pool-help { font-size: 0.8rem; color: var(--text-muted); margin: 8px 0; line-height: 1.4; }
+    .pool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .pool-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 6px;
+    }
+    .pool-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--tile-bg);
+      border: 1px solid #594a38;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .pool-item.off { opacity: 0.45; }
+    .pool-item img { width: 28px; height: 28px; object-fit: contain; flex: none; }
+    .pool-item .pi-text { flex: 1; min-width: 0; }
+    .pool-item .pi-title { font-weight: bold; color: var(--text-main); }
+    .pool-item .pi-meta { color: var(--ice); font-size: 0.72rem; }
+    .badge {
+      display: inline-block;
+      font-size: 0.64rem;
+      padding: 0 5px;
+      border-radius: 4px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .badge.est { background: #5a4a1c; color: #ffd98a; }
+    .badge.on { background: #1d4a2c; color: #a6f0bd; }
+
+    .rules {
+      margin-top: 18px;
+      max-width: 780px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OSRS Christmas PvM Bingo</h1>
+    <p class="subtitle">Clan-style PvM &amp; snowy boss drop bingo. Click tiles as drops hit your collection log.</p>
+  </header>
+
+  <div class="controls">
+    <div class="stat">Tiles: <span id="completedCount">0</span> / 25</div>
+    <div class="stat">Bingos: <span id="lineCount">0</span> / 12</div>
+    <div class="stat">Each line: <span id="lineRange">–</span></div>
+    <button id="newBoardBtn" class="ctrl-btn green" type="button">New Random Board</button>
+    <button id="shuffleBtn" class="ctrl-btn secondary" type="button">Rebalance Layout</button>
+    <button id="resetBtn" class="ctrl-btn" type="button">Reset Progress</button>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="bingo-banner" id="bingoBanner" hidden></div>
+  <div class="status-msg" id="statusMsg" role="status"></div>
+
+  <div class="code-row">
+    <label for="boardCode">Board code:</label>
+    <input id="boardCode" type="text" spellcheck="false" autocomplete="off" />
+    <button id="copyCodeBtn" class="ctrl-btn secondary" type="button">Copy</button>
+    <button id="loadCodeBtn" class="ctrl-btn secondary" type="button">Load</button>
+  </div>
+
+  <details class="pool" id="pool">
+    <summary>Tile pool (<span id="poolCount">0</span> enabled)</summary>
+    <p class="pool-help">
+      <b>New Random Board</b> draws 24 tiles from the enabled pool, then arranges them so every row and column
+      takes a similar number of hours. Untick tiles you don't want drawn. Tiles marked <span class="badge est">est.</span>
+      aren't in the kills/hr sheet, so their hours are estimates. Share a board with your clan using the board code below the board.
+    </p>
+    <div class="pool-actions">
+      <button id="poolAllBtn" class="ctrl-btn secondary" type="button">Enable all</button>
+      <button id="poolResetBtn" class="ctrl-btn secondary" type="button">Reset pool to defaults</button>
+    </div>
+    <div class="pool-list" id="poolList"></div>
+  </details>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden>
+    <div class="tooltip-title"></div>
+    <div class="tooltip-sub"></div>
+    <div class="tooltip-hrs"></div>
+    <div class="tooltip-src"></div>
+  </div>
+
+  <p class="rules">
+    Rows, columns and both diagonals count as a bingo. "Any N" tiles accept duplicates.
+    Hours are expected time at the kill rates in the TempleOSRS kills/hr sheet &times; drop rates; most players will
+    take longer, but every row and column is balanced to a similar total.
+    Progress is saved in this browser. Click a completed tile again to unmark it.
+  </p>
+
+  <script>
+    // ---------------------------------------------------------------------------------
+    // Boss data. kph = kills (or raids/chests) per hour. Drop rates are per kill.
+    // Source: cleaned_boss_kills_per_hour.xlsx (TempleOSRS) unless est: true.
+    // Pets and jars are left out on purpose; only drops that count for a tile are listed.
+    // ---------------------------------------------------------------------------------
+    const BOSSES = {
+      sire:       { name: "Abyssal Sire", kph: 32, drops: { "Bludgeon claw": 0.004843, "Bludgeon spine": 0.004843, "Bludgeon axon": 0.004843, "Abyssal dagger": 0.002031 } },
+      hydra:      { name: "Alchemical Hydra", kph: 29, drops: { "Hydra's eye": 0.005525, "Hydra's fang": 0.005525, "Hydra's heart": 0.005525, "Hydra tail": 0.001949, "Hydra leather": 0.001946, "Hydra's claw": 0.000999 } },
+      araxxor:    { name: "Araxxor", kph: 37, drops: { "Noxious pommel": 0.005, "Noxious point": 0.005, "Noxious blade": 0.005, "Araxyte fang": 0.001667 } },
+      callisto:   { name: "Callisto", kph: 55, drops: { "Claws of callisto": 0.005102, "Dragon 2h sword": 0.003906, "Dragon pickaxe": 0.003906, "Voidwaker hilt": 0.002778, "Tyrannical ring": 0.001953 } },
+      vetion:     { name: "Vet'ion", kph: 35, drops: { "Skull of vet'ion": 0.005102, "Dragon 2h sword": 0.003906, "Dragon pickaxe": 0.003906, "Voidwaker blade": 0.002778, "Ring of the gods": 0.001953 } },
+      venenatis:  { name: "Venenatis", kph: 33, drops: { "Fangs of venenatis": 0.005102, "Dragon 2h sword": 0.003906, "Dragon pickaxe": 0.003906, "Voidwaker gem": 0.002778, "Treasonous ring": 0.001953 } },
+      cerberus:   { name: "Cerberus", kph: 54, drops: { "Primordial crystal": 0.001923, "Pegasian crystal": 0.001923, "Eternal crystal": 0.001923, "Smouldering stone": 0.001923 } },
+      rex:        { name: "Dagannoth Rex", kph: 100, drops: { "Berserker ring": 0.0078125, "Warrior ring": 0.0078125 } },
+      prime:      { name: "Dagannoth Prime", kph: 100, drops: { "Seers ring": 0.0078125 } },
+      supreme:    { name: "Dagannoth Supreme", kph: 100, drops: { "Archers ring": 0.0078125 } },
+      zilyana:    { name: "Commander Zilyana", kph: 30, drops: { "Saradomin sword": 0.007874, "Saradomin's light": 0.003937, "Armadyl crossbow": 0.001969, "Saradomin hilt": 0.001969 } },
+      graardor:   { name: "General Graardor", kph: 31, drops: { "Bandos chestplate": 0.002625, "Bandos tassets": 0.002625, "Bandos boots": 0.002625, "Bandos hilt": 0.001969 } },
+      kree:       { name: "Kree'arra", kph: 30, drops: { "Armadyl helmet": 0.002625, "Armadyl chestplate": 0.002625, "Armadyl chainskirt": 0.002625, "Armadyl hilt": 0.001969 } },
+      kril:       { name: "K'ril Tsutsaroth", kph: 28, drops: { "Steam battlestaff": 0.007874, "Zamorakian spear": 0.007874, "Staff of the dead": 0.001969, "Zamorak hilt": 0.001969 } },
+      kq:         { name: "Kalphite Queen", kph: 37, drops: { "Dragon chainbody": 0.0078125, "Dragon 2h sword": 0.003906, "Dragon pickaxe": 0.0025 } },
+      kraken:     { name: "Kraken", kph: 82, drops: { "Trident of the seas": 0.001953, "Kraken tentacle": 0.0025 } },
+      muspah:     { name: "Phantom Muspah", kph: 25, drops: { "Venator shard": 0.01 } },
+      nex:        { name: "Nex", kph: 20, drops: { "Zaryte vambraces": 0.005814, "Nihil horn": 0.003876, "Torva full helm": 0.003876, "Torva platebody": 0.003876, "Torva platelegs": 0.003876, "Ancient hilt": 0.001938 } },
+      nightmare:  { name: "The Nightmare", kph: 11, drops: { "Nightmare staff": 0.005814, "Inquisitor's great helm": 0.004167, "Inquisitor's hauberk": 0.004167, "Inquisitor's plateskirt": 0.004167, "Inquisitor's mace": 0.002331, "Eldritch orb": 0.001821, "Harmonised orb": 0.001821, "Volatile orb": 0.001821 } },
+      scorpia:    { name: "Scorpia", kph: 80, drops: { "Odium shard 3": 0.003906, "Malediction shard 3": 0.003906 } },
+      crazyarch:  { name: "Crazy Archaeologist", kph: 75, drops: { "Odium shard 2": 0.003906, "Malediction shard 2": 0.003906 } },
+      fanatic:    { name: "Chaos Fanatic", kph: 80, drops: { "Odium shard 1": 0.003906, "Malediction shard 1": 0.003906 } },
+      thermy:     { name: "Thermonuclear Smoke Devil", kph: 100, drops: { "Occult necklace": 0.002857, "Smoke battlestaff": 0.001953, "Dragon chainbody": 0.0005 } },
+      vorkath:    { name: "Vorkath", kph: 33, drops: { "Vorkath's head": 0.02, "Dragonbone necklace": 0.001, "Draconic visage": 0.0002, "Skeletal visage": 0.0002 } },
+      yama:       { name: "Yama", kph: 20, drops: { "Soulflame horn": 0.003333, "Oathplate helm": 0.001667, "Oathplate chest": 0.001667, "Oathplate legs": 0.001667 } },
+      zulrah:     { name: "Zulrah", kph: 39, drops: { "Tanzanite fang": 0.001953, "Magic fang": 0.001953, "Serpentine visage": 0.001953, "Uncut onyx": 0.001953, "Tanzanite mutagen": 0.000153, "Magma mutagen": 0.000153 } },
+      cg:         { name: "Corrupted Gauntlet", kph: 7, drops: { "Crystal weapon seed": 0.02, "Crystal armour seed": 0.02, "Enhanced crystal weapon seed": 0.0025 } },
+      gg:         { name: "Grotesque Guardians", kph: 33, drops: { "Granite gloves": 0.004, "Granite ring": 0.004, "Granite hammer": 0.002667, "Black tourmaline core": 0.002 } },
+      hueycoatl:  { name: "The Hueycoatl", kph: 20, drops: { "Tome of earth": 0.011111, "Dragon hunter wand": 0.009524 } },
+      titans:     { name: "Royal Titans", kph: 60, drops: { "Fire element staff crown": 0.013333, "Ice element staff crown": 0.013333, "Mystic vigour prayer scroll": 0.013333, "Deadeye prayer scroll": 0.013333 } },
+      lunar:      { name: "Lunar Chests", kph: 18, drops: { "Any moon unique": 0.052632 } },
+      cox:        { name: "Chambers of Xeric", kph: 2.9, drops: { "Dexterous prayer scroll": 0.01, "Arcane prayer scroll": 0.01, "Twisted buckler": 0.002, "Dragon hunter crossbow": 0.002, "Dinh's bulwark": 0.0015, "Ancestral hat": 0.0015, "Ancestral robe top": 0.0015, "Ancestral robe bottom": 0.0015, "Dragon claws": 0.0015, "Elder maul": 0.001, "Kodai insignia": 0.001, "Twisted bow": 0.001 } },
+      tob:        { name: "Theatre of Blood", kph: 2.9, drops: { "Avernic defender hilt": 0.046275, "Ghrazi rapier": 0.011567, "Sanguinesti staff": 0.011567, "Justiciar faceguard": 0.011567, "Justiciar chestguard": 0.011567, "Justiciar legguards": 0.011567, "Scythe of vitur": 0.005784 } },
+
+      // ---- Not in the kills/hr sheet: estimates ----
+      // Barrows: the sheet's 1/102 doesn't match "any item"; the wiki's ~1/14.3 per chest (all 6 brothers) is used instead.
+      barrows:    { name: "Barrows Chests", kph: 22, est: true, drops: { "Any Barrows item": 1 / 14.3 } },
+      // ---- Agreed clan rates (not in the sheet; locked in by the clan 2026-11-24) ----
+      // Fractured Archive (Oct 2026): 1/17 duo unique chance per the wiki, 1.5 raids/hr.
+      tfa:        { name: "The Fractured Archive", kph: 1.5, agreed: true, drops: { "Any Fractured Archive unique": 1 / 17 } },
+      // Maggot King (Jun 2026): drop rates from the wiki, 25 kills/hr.
+      maggot:     { name: "Maggot King", kph: 25, agreed: true, drops: { "Elder venator fang": 1 / 340, "Crimson kisten": 1 / 520 } },
+
+      // ---- Estimates ----
+      // Mad Angel (Jul 2026): ~34 kills/hr from the wiki money-making guide (1.03M gp/hr ÷ 30.3k per kill).
+      madangel:   { name: "Mad Angel", kph: 34, est: true, drops: { "Hallowfell": 1 / 127, "Jar of Light": 1 / 1000 } },
+      gorillas:   { name: "Demonic gorillas", kph: 100, est: true, drops: { "Zenyte shard": 1 / 300 } },
+      tds:        { name: "Tormented Demons", kph: 70, est: true, drops: { "Tormented synapse": 1 / 500, "Burning claw": 1 / 500 } },
+      abyssals:   { name: "Abyssal demons", kph: 170, est: true, drops: { "Abyssal whip": 1 / 512 } }
+    };
+
+    // ---------------------------------------------------------------------------------
+    // Tile pool. APPEND NEW TILES AT THE END: board codes use each tile's position here.
+    // from  = bosses that can drop it (the fastest one sets the hours)
+    // items = which drops count ("*" = every drop listed for that boss)
+    // need  = how many drops are needed (duplicates OK)
+    // group = tiles in the same group never appear on the same board
+    // off   = left out of the pool by default
+    // ---------------------------------------------------------------------------------
+    const TILES = [
+      { id: "free",    free: true, img: "Santa_hat", title: "FREE: Snowball Spec", sub: "Equip Santa hat/jumper & get any boss KC" },
+      { id: "cerb",    img: "Primordial_crystal",           title: "Red & Green Crystals", sub: "Primordial, Pegasian, or Eternal crystal (Cerberus)", from: ["cerberus"], items: ["Primordial crystal", "Pegasian crystal", "Eternal crystal"] },
+      { id: "dks",     img: "Berserker_ring",               title: "Lord of the Rings",    sub: "Any 3 Dagannoth King rings", need: 3, from: ["rex", "prime", "supreme"], items: "*" },
+      { id: "raid",    img: "Twisted_bow",                  title: "Raid Purple",          sub: "Any CoX, ToB, ToA, or Fractured Archive unique", group: "raid", from: ["cox", "tob", "tfa"], items: "*" },
+      { id: "vork",    img: "Vorkath's_head",               title: "Vorkath",              sub: "Any 2: Vorkath's head, Dragonbone necklace, or visage", need: 2, from: ["vorkath"], items: "*" },
+      { id: "barrows", img: "Dharok's_helm",                title: "Barrows Haul",         sub: "Any 5 Barrows armour/weapon drops", need: 5, from: ["barrows"], items: "*" },
+      { id: "zenyte",  img: "Zenyte_shard",                 title: "Zenyte Shard",         sub: "Demonic gorilla drop", from: ["gorillas"], items: "*" },
+      { id: "gwd",     img: "Bandos_hilt",                  title: "GWD Unique",           sub: "Any armour, weapon, or hilt from a God Wars general (no pets)", group: "gwd", from: ["zilyana", "graardor", "kree", "kril"], items: "*" },
+      { id: "zulrah",  img: "Tanzanite_fang",               title: "Zulrah Unique",        sub: "Tanzanite/Magic fang, Serpentine visage, Uncut onyx, or mutagen", from: ["zulrah"], items: "*" },
+      { id: "dt2",     img: "Ultor_vestige",                title: "DT2 Boss Unique",      sub: "Any unique from Duke, Vardorvis, Leviathan, or Whisperer", fixedHrs: 8.1, fixedNote: "Best at The Whisperer, 21 kills/hr (kills/hr sheet)" },
+      { id: "wildy",   img: "Dragon_pickaxe",               title: "Wildy Bosses",         sub: "Any 2 uniques from Callisto, Vet'ion, or Venenatis (or their cave versions)", need: 2, from: ["callisto", "vetion", "venenatis"], items: "*" },
+      { id: "muspah",  img: "Venator_shard",                title: "Phantom Muspah",       sub: "Venator shard", from: ["muspah"], items: "*" },
+      { id: "cg",      img: "Enhanced_crystal_weapon_seed", title: "Crystal Seeds",        sub: "Crystal armour seed, Crystal weapon seed, or Enhanced weapon seed (Corrupted Gauntlet)", from: ["cg"], items: "*" },
+      { id: "slayer",  img: "Abyssal_whip",                 title: "Slayer Staples",       sub: "Abyssal whip, Dark bow, or Black mask", from: ["abyssals"], items: "*" },
+      { id: "nex",     img: "Torva_full_helm",              title: "Nex Unique",           sub: "Torva, Zaryte vambraces, Nihil horn, or Ancient hilt", from: ["nex"], items: "*" },
+      { id: "hydra",   img: "Hydra's_claw",                 title: "Hydra Uniques",        sub: "Any 2: Claw, Leather, Ring piece, or Tail", need: 2, from: ["hydra"], items: "*" },
+      { id: "gg",      img: "Granite_maul",                 title: "Grotesque Guardians",  sub: "Granite gloves, ring, hammer, or Black tourmaline core", from: ["gg"], items: "*" },
+      { id: "thermy",  img: "Occult_necklace",              title: "Up in Smoke",          sub: "Any 2: Occult necklace, Smoke battlestaff, or Dragon chainbody (Thermy)", need: 2, from: ["thermy"], items: "*" },
+      { id: "moons",   img: "Eclipse_atlatl",               title: "Moons of Peril",       sub: "Any 2 Blood, Blue, or Eclipse moon uniques", need: 2, from: ["lunar"], items: "*" },
+      { id: "tds",     img: "Tormented_synapse",            title: "Tormented Demons",     sub: "Tormented synapse or Burning claw", from: ["tds"], items: "*" },
+      { id: "arax",    img: "Araxyte_fang",                 title: "Araxxor Uniques",      sub: "Any 2: Noxious point, blade, pommel, or Araxyte fang", need: 2, from: ["araxxor"], items: "*" },
+      { id: "kraken",  img: "Kraken_tentacle",              title: "Release the Kraken",   sub: "Kraken tentacle or Trident of the seas", from: ["kraken"], items: "*" },
+      { id: "sire",    img: "Bludgeon_claw",                title: "Abyssal Sire",         sub: "Any Bludgeon piece or Abyssal dagger", from: ["sire"], items: "*" },
+      { id: "kq",      img: "Dragon_2h_sword",              title: "Kalphite Queen",       sub: "Dragon chainbody, Dragon 2h sword, or Dragon pickaxe", from: ["kq"], items: "*" },
+      { id: "angel",   img: "Hallowfell",                   title: "Fallen Angel",         sub: "Hallowfell or Jar of Light (Mad Angel)", from: ["madangel"], items: "*" },
+      { id: "nm",      img: "Nightmare_staff",              title: "Sweet Dreams",         sub: "Any Nightmare unique: staff, orb, or Inquisitor's piece", from: ["nightmare"], items: "*" },
+      { id: "bandos",  img: "Bandos_chestplate",            title: "Bandos Armour",        sub: "Bandos chestplate, tassets, boots, or hilt", group: "gwd", from: ["graardor"], items: "*" },
+      { id: "arma",    img: "Armadyl_helmet",               title: "Armadyl Armour",       sub: "Armadyl helmet, chestplate, chainskirt, or hilt", group: "gwd", from: ["kree"], items: "*" },
+      { id: "shards",  img: "Odium_shard_1",                title: "Ward Shards",          sub: "Any 2 Odium or Malediction shards (Scorpia, Crazy Arch, or Chaos Fanatic)", need: 2, from: ["scorpia", "crazyarch", "fanatic"], items: "*" },
+      { id: "yama",    img: "Oathplate_helm",               title: "Oathbound",            sub: "Oathplate helm, chest, legs, or Soulflame horn (Yama)", from: ["yama"], items: "*" },
+      { id: "huey",    img: "Dragon_hunter_wand",           title: "The Hueycoatl",        sub: "Tome of earth or Dragon hunter wand", from: ["hueycoatl"], items: "*" },
+      { id: "titans",  img: "Fire_element_staff_crown",     title: "Royal Titans",         sub: "Any 4: Fire/Ice element staff crown, Mystic vigour, or Deadeye scroll", need: 4, from: ["titans"], items: "*" },
+      { id: "tfa",     img: "Zorya's_tome",                 title: "Fractured Archive",    sub: "Any Fractured Archive unique (Zorya's tome, Rondache, Ascension crossbows, Obligator, etc.)", group: "raid", from: ["tfa"], items: "*" },
+      { id: "maggot",  img: "Elder_venator_fang",           title: "Maggot King",          sub: "Elder venator fang or Crimson kisten", from: ["maggot"], items: "*" }
+    ];
+
+    const TILE_BY_ID = Object.fromEntries(TILES.map(t => [t.id, t]));
+    const FREE_ID = "free";
+    const FREE_POS = 12;
+    const BOARD_TILES = 24;
+
+    // Expected hours for a tile: need / (best boss's kills/hr × combined drop rate)
+    function tileInfo(t) {
+      if (t.free) return { hrs: 0, note: "Free space", est: false };
+      if (t.fixedHrs) return { hrs: t.fixedHrs, note: t.fixedNote, est: false };
+      let best = null;
+      for (const key of t.from) {
+        const b = BOSSES[key];
+        const names = t.items === "*" ? Object.keys(b.drops) : t.items.filter(n => n in b.drops);
+        const rate = names.reduce((s, n) => s + b.drops[n], 0);
+        const perHour = b.kph * rate;
+        if (perHour > 0 && (!best || perHour > best.perHour)) best = { perHour, b };
+      }
+      const hrs = (t.need || 1) / best.perHour;
+      const many = t.from.length > 1 ? `Best at ${best.b.name}, ` : "";
+      const unit = best.b.kph < 5 ? " runs/hr" : " kills/hr";
+      const src = best.b.est ? " (estimate)" : best.b.agreed ? " (agreed clan rate)" : " (kills/hr sheet)";
+      const note = `${many}${best.b.kph}${unit}${src}`;
+      return { hrs, note, est: !!best.b.est };
+    }
+    const INFO = Object.fromEntries(TILES.map(t => [t.id, tileInfo(t)]));
+    const fmtHrs = h => (h < 10 ? h.toFixed(1) : Math.round(h).toString());
+
+    // 12 winning lines: 5 rows, 5 cols, 2 diagonals (as board positions)
+    const ROWS = [], COLS = [];
+    for (let i = 0; i < 5; i++) {
+      ROWS.push([0, 1, 2, 3, 4].map(c => i * 5 + c));
+      COLS.push([0, 1, 2, 3, 4].map(r => r * 5 + i));
+    }
+    const DIAGS = [[0, 6, 12, 18, 24], [4, 8, 12, 16, 20]];
+    const LINES = [...ROWS, ...COLS, ...DIAGS];
+
+    const lineHours = (order, line) => line.reduce((s, p) => s + INFO[order[p]].hrs, 0);
+
+    // Seeded RNG so the default board is the same for everyone
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function shuffled(arr, rand) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // Score how uneven the lines are: rows + columns matter most, diagonals a bit less
+    function imbalance(order) {
+      const sums = [...ROWS, ...COLS].map(l => lineHours(order, l));
+      const mean = sums.reduce((a, b) => a + b, 0) / sums.length;
+      let cost = sums.reduce((a, s) => a + (s - mean) ** 2, 0);
+      DIAGS.forEach(d => { cost += 0.5 * (lineHours(order, d) - mean) ** 2; });
+      return cost;
+    }
+
+    // Arrange 24 tile ids (+ free centre) so lines are even: random start + swap hill-climbing, several restarts
+    function balancedOrder(ids24, rand) {
+      const movable = [...Array(25).keys()].filter(p => p !== FREE_POS);
+      let best = null, bestCost = Infinity;
+
+      for (let restart = 0; restart < 25; restart++) {
+        const ids = shuffled(ids24, rand);
+        ids.splice(FREE_POS, 0, FREE_ID);
+        let cost = imbalance(ids);
+
+        for (let iter = 0; iter < 3000; iter++) {
+          const a = movable[Math.floor(rand() * movable.length)];
+          const b = movable[Math.floor(rand() * movable.length)];
+          if (a === b) continue;
+          [ids[a], ids[b]] = [ids[b], ids[a]];
+          const c = imbalance(ids);
+          if (c <= cost) cost = c;
+          else [ids[a], ids[b]] = [ids[b], ids[a]];
+        }
+        if (cost < bestCost) { bestCost = cost; best = ids.slice(); }
+      }
+      return best;
+    }
+
+    // Draw 24 tiles from the enabled pool, never two from the same group
+    function drawTiles(off, rand) {
+      const picked = [], groups = new Set();
+      for (const t of shuffled(TILES.filter(t => !t.free && !off.includes(t.id)), rand)) {
+        if (t.group && groups.has(t.group)) continue;
+        picked.push(t.id);
+        if (t.group) groups.add(t.group);
+        if (picked.length === BOARD_TILES) return picked;
+      }
+      return null;
+    }
+
+    // ---------------------------------------------------------------------------------
+    // State
+    // ---------------------------------------------------------------------------------
+    const STORE_KEY = "osrs-xmas-bingo-v3";
+    const OLD_KEY = "osrs-xmas-bingo-v2";
+    const POOL_VER = 2;
+    const defaultOff = () => TILES.filter(t => t.off).map(t => t.id);
+
+    function validOrder(order) {
+      return Array.isArray(order) && order.length === 25 && order[FREE_POS] === FREE_ID &&
+        new Set(order).size === 25 && order.every(id => id in TILE_BY_ID);
+    }
+
+    function defaultState() {
+      const off = defaultOff();
+      const rand = mulberry32(2025);
+      return { order: balancedOrder(drawTiles(off, rand), rand), done: [], off, poolVer: POOL_VER };
+    }
+
+    function loadState() {
+      try {
+        const s = JSON.parse(localStorage.getItem(STORE_KEY));
+        if (s && validOrder(s.order)) {
+          let off = Array.isArray(s.off) ? s.off.filter(id => id in TILE_BY_ID) : defaultOff();
+          // Pool v2: TFA and Maggot King are now on by default
+          if (s.poolVer !== POOL_VER) off = off.filter(id => id !== "tfa" && id !== "maggot");
+          return { order: s.order, done: (s.done || []).filter(id => s.order.includes(id)), off, poolVer: POOL_VER };
+        }
+        // Carry over a board + progress from the previous version
+        const old = JSON.parse(localStorage.getItem(OLD_KEY));
+        if (old && Array.isArray(old.order)) {
+          const order = old.order.map(id => (id === "corp" ? "angel" : id));
+          if (validOrder(order)) {
+            const done = (old.done || []).filter(id => id !== "corp" && order.includes(id));
+            return { order, done, off: defaultOff(), poolVer: POOL_VER };
+          }
+        }
+      } catch (e) {}
+      return defaultState();
+    }
+
+    let state = loadState();
+    saveState();
+
+    function saveState() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+    }
+
+    // Board code: each tile's pool index as 2 base-36 characters, in board order
+    function encodeBoard(order) {
+      return "XB1-" + order.map(id => TILES.findIndex(t => t.id === id).toString(36).padStart(2, "0")).join("");
+    }
+    function decodeBoard(code) {
+      const m = /^XB1-([0-9a-z]{50})$/i.exec(code.trim());
+      if (!m) return null;
+      const order = m[1].toLowerCase().match(/../g).map(s => (TILES[parseInt(s, 36)] || {}).id);
+      return validOrder(order) ? order : null;
+    }
+
+    function setStatus(msg) {
+      const el = document.getElementById("statusMsg");
+      el.textContent = msg;
+      clearTimeout(setStatus.timer);
+      setStatus.timer = setTimeout(() => { el.textContent = ""; }, 4000);
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Rendering
+    // ---------------------------------------------------------------------------------
+    const WIKI_IMG = "https://oldschool.runescape.wiki/images/";
+
+    // Item art from the OSRS Wiki; falls back to the small inventory icon if the detail image fails
+    function wikiImg(name) {
+      const el = document.createElement("img");
+      el.alt = "";
+      el.loading = "lazy";
+      el.src = WIKI_IMG + name + "_detail.png";
+      el.onerror = () => {
+        if (!el.dataset.fallback) { el.dataset.fallback = "1"; el.src = WIKI_IMG + name + ".png"; }
+        else el.remove();
+      };
+      return el;
+    }
+
+    function completedLines() {
+      const done = new Set(state.done);
+      return LINES.filter(line => line.every(pos => done.has(state.order[pos])));
+    }
+
+    function render() {
+      const board = document.getElementById("board");
+      hideTip();
+      board.innerHTML = "";
+      const done = new Set(state.done);
+      const lines = completedLines();
+      const inLine = new Set(lines.flat());
+
+      state.order.forEach((id, pos) => {
+        const t = TILE_BY_ID[id];
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tile" +
+          (t.free ? " free-space" : "") +
+          (done.has(id) ? " completed" : "") +
+          (inLine.has(pos) ? " in-line" : "");
+        btn.setAttribute("aria-pressed", done.has(id));
+        const img = wikiImg(t.img);
+        img.className = "tile-img";
+        btn.appendChild(img);
+        const title = document.createElement("div");
+        title.className = "tile-title";
+        title.textContent = t.title;
+        btn.appendChild(title);
+        if (!t.free) {
+          const hrs = document.createElement("div");
+          hrs.className = "tile-hrs";
+          hrs.textContent = `≈ ${fmtHrs(INFO[id].hrs)} hrs`;
+          btn.appendChild(hrs);
+        }
+        btn.setAttribute("aria-label", `${t.title}: ${t.sub}`);
+        btn.addEventListener("click", () => toggle(id));
+        btn.addEventListener("mouseover", () => showTip(btn, t));
+        btn.addEventListener("focus", () => showTip(btn, t));
+        btn.addEventListener("mouseleave", hideTip);
+        btn.addEventListener("blur", hideTip);
+        board.appendChild(btn);
+      });
+
+      const sums = [...ROWS, ...COLS].map(l => lineHours(state.order, l));
+      document.getElementById("lineRange").textContent =
+        `${Math.min(...sums).toFixed(1)}–${Math.max(...sums).toFixed(1)} hrs`;
+
+      document.getElementById("completedCount").textContent = state.done.length;
+      document.getElementById("lineCount").textContent = lines.length;
+
+      const banner = document.getElementById("bingoBanner");
+      if (state.done.length === 25) {
+        banner.textContent = "BLACKOUT! Every tile complete. Absolute gamer. 🎄";
+        banner.hidden = false;
+      } else if (lines.length > 0) {
+        banner.textContent = `BINGO! ${lines.length} line${lines.length > 1 ? "s" : ""} complete. 🎁`;
+        banner.hidden = false;
+      } else {
+        banner.hidden = true;
+      }
+
+      document.getElementById("boardCode").value = encodeBoard(state.order);
+      renderPool();
+    }
+
+    function renderPool() {
+      const list = document.getElementById("poolList");
+      list.innerHTML = "";
+      const onBoard = new Set(state.order);
+      let enabled = 0;
+      TILES.filter(t => !t.free).forEach(t => {
+        const isOn = !state.off.includes(t.id);
+        if (isOn) enabled++;
+        const label = document.createElement("label");
+        label.className = "pool-item" + (isOn ? "" : " off");
+        label.title = t.sub;
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = isOn;
+        cb.addEventListener("change", () => {
+          state.off = cb.checked ? state.off.filter(id => id !== t.id) : [...state.off, t.id];
+          saveState();
+          renderPool();
+        });
+        label.appendChild(cb);
+        label.appendChild(wikiImg(t.img));
+        const text = document.createElement("div");
+        text.className = "pi-text";
+        const title = document.createElement("div");
+        title.className = "pi-title";
+        title.textContent = t.title;
+        if (INFO[t.id].est) title.insertAdjacentHTML("beforeend", ' <span class="badge est">est.</span>');
+        if (onBoard.has(t.id)) title.insertAdjacentHTML("beforeend", ' <span class="badge on">on board</span>');
+        const meta = document.createElement("div");
+        meta.className = "pi-meta";
+        meta.textContent = `≈ ${fmtHrs(INFO[t.id].hrs)} hrs`;
+        text.appendChild(title);
+        text.appendChild(meta);
+        label.appendChild(text);
+        list.appendChild(label);
+      });
+      document.getElementById("poolCount").textContent = enabled;
+    }
+
+    // Hover / focus tooltip with the full tile description
+    const tip = document.getElementById("tooltip");
+    function showTip(el, t) {
+      const info = INFO[t.id];
+      tip.querySelector(".tooltip-title").textContent = t.title;
+      tip.querySelector(".tooltip-sub").textContent = t.sub;
+      tip.querySelector(".tooltip-hrs").textContent = t.free ? "Free space" : `≈ ${fmtHrs(info.hrs)} hrs at efficient rates`;
+      tip.querySelector(".tooltip-src").textContent = t.free ? "" : info.note;
+      tip.hidden = false;
+      const r = el.getBoundingClientRect();
+      const tr = tip.getBoundingClientRect();
+      let top = r.top - tr.height - 8;
+      if (top < 4) top = r.bottom + 8;            // flip below if no room above
+      let left = r.left + r.width / 2 - tr.width / 2;
+      left = Math.max(4, Math.min(left, window.innerWidth - tr.width - 4));
+      tip.style.top = `${top}px`;
+      tip.style.left = `${left}px`;
+    }
+    function hideTip() { tip.hidden = true; }
+    window.addEventListener("scroll", hideTip, true);
+
+    // ---------------------------------------------------------------------------------
+    // Actions
+    // ---------------------------------------------------------------------------------
+    function toggle(id) {
+      const i = state.done.indexOf(id);
+      if (i >= 0) state.done.splice(i, 1);
+      else state.done.push(id);
+      saveState();
+      render();
+    }
+
+    // Two-click confirm for anything that wipes progress
+    function confirmButton(btn, needsConfirm, action) {
+      const label = btn.textContent;
+      let armed = false, timer;
+      btn.addEventListener("click", () => {
+        if (needsConfirm() && !armed) {
+          armed = true;
+          btn.textContent = "Click again – clears progress";
+          timer = setTimeout(() => { armed = false; btn.textContent = label; }, 3000);
+          return;
+        }
+        clearTimeout(timer);
+        armed = false;
+        btn.textContent = label;
+        action();
+      });
+    }
+
+    const hasProgress = () => state.done.length > 0;
+
+    confirmButton(document.getElementById("newBoardBtn"), hasProgress, () => {
+      const ids = drawTiles(state.off, Math.random);
+      if (!ids) {
+        setStatus(`Not enough tiles enabled: need ${BOARD_TILES} (tiles in the same group count once).`);
+        document.getElementById("pool").open = true;
+        return;
+      }
+      state.order = balancedOrder(ids, Math.random);
+      state.done = [];
+      saveState();
+      render();
+      setStatus("New board drawn from the tile pool.");
+    });
+
+    document.getElementById("shuffleBtn").addEventListener("click", () => {
+      // Same tiles, new arrangement. Progress is kept (it's tracked per tile).
+      state.order = balancedOrder(state.order.filter(id => id !== FREE_ID), Math.random);
+      saveState();
+      render();
+      setStatus("Layout rebalanced. Your ticked tiles are kept.");
+    });
+
+    confirmButton(document.getElementById("resetBtn"), () => true, () => {
+      state.done = [];
+      saveState();
+      render();
+    });
+
+    document.getElementById("copyCodeBtn").addEventListener("click", async () => {
+      const code = encodeBoard(state.order);
+      try { await navigator.clipboard.writeText(code); setStatus("Board code copied."); }
+      catch (e) { document.getElementById("boardCode").select(); setStatus("Press Ctrl+C to copy the code."); }
+    });
+
+    confirmButton(document.getElementById("loadCodeBtn"), hasProgress, () => {
+      const order = decodeBoard(document.getElementById("boardCode").value);
+      if (!order) { setStatus("That board code isn't valid."); return; }
+      state.order = order;
+      state.done = [];
+      saveState();
+      render();
+      setStatus("Board loaded from code.");
+    });
+
+    document.getElementById("poolAllBtn").addEventListener("click", () => {
+      state.off = [];
+      saveState();
+      renderPool();
+    });
+
+    document.getElementById("poolResetBtn").addEventListener("click", () => {
+      state.off = defaultOff();
+      saveState();
+      renderPool();
+      setStatus("Tile pool reset to defaults.");
+    });
+
+    render();
+  </script>
+</body>
+</html>
