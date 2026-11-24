@@ -305,7 +305,7 @@
       padding: 4px 7px;
     }
     .team-bar #playerName { width: 120px; }
-    .team-bar #teamCodeInput { width: 170px; font-family: Consolas, monospace; }
+    .team-bar #teamCodeInput { width: 170px; }
     .team-bar .group { display: inline-flex; gap: 6px; align-items: center; }
     .team-bar .group[hidden] { display: none; }
     .team-status { font-weight: bold; color: var(--text-muted); }
@@ -357,7 +357,7 @@
     <label class="group">Your name <input id="playerName" type="text" maxlength="24" autocomplete="off" placeholder="RSN" /></label>
     <span class="team-status" id="teamStatus"><span class="dot"></span>Solo: progress saved in this browser only</span>
     <span class="group" id="teamJoinGroup">
-      <input id="teamCodeInput" type="text" spellcheck="false" autocomplete="off" placeholder="team code" aria-label="Team code" />
+      <input id="teamCodeInput" type="text" spellcheck="false" autocomplete="off" placeholder="team name, e.g. team1" aria-label="Team name" maxlength="40" />
       <button id="joinTeamBtn" class="ctrl-btn secondary" type="button">Join team</button>
       <button id="createTeamBtn" class="ctrl-btn green" type="button">Create team</button>
     </span>
@@ -938,10 +938,10 @@
     }
 
     // ---------------------------------------------------------------------------------
-    // Team sync (Firebase Firestore). One document per team: rooms/<team code>
+    // Team sync (Firebase Firestore). One document per team: rooms/<id from the team name>
     //   { order: [25 tile ids], done: { tileId: { by, at } }, updated }
-    // The team code works like a password: the rules don't allow listing rooms, so only
-    // people who have the code can open that team's board.
+    // The team name works like a password: the rules don't allow listing rooms, so only
+    // people who know the name can open that team's board. Short names are easy to guess.
     // ---------------------------------------------------------------------------------
     let fbPromise = null;
     function loadFirebase() {
@@ -1005,36 +1005,60 @@
       document.getElementById("teamInGroup").hidden = !team;
     }
 
-    async function createTeam() {
-      const fb = await loadFirebase();
-      if (!fb) return;
-      const code = makeTeamCode();
-      // The new team starts on your current board, keeping any ticks you already have
-      const done = {};
-      state.done.forEach(id => { done[id] = { by: state.doneBy[id] || playerName(), at: fb.serverTimestamp() }; });
-      try {
-        await fb.setDoc(fb.doc(fb.db, "rooms", code), { order: state.order, done, updated: fb.serverTimestamp() });
-      } catch (e) { syncError(e); return; }
-      await joinTeam(code);
-      setStatus("Team created. Click 'Copy team link' and send it to your teammates.");
+    // Team names: case and extra spaces don't matter ("Team 1" = "team  1")
+    const normTeamName = s => String(s || "").trim().toLowerCase().replace(/\s+/g, " ").slice(0, 40);
+
+    // Any team name maps to a fixed document id ("t-" + 38 hex chars of its SHA-256),
+    // which fits the Firestore rules' id pattern whatever characters the name has.
+    async function teamDocId(name) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("osrs-bingo-team:" + name));
+      return "t-" + Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join("").slice(0, 38);
     }
 
-    async function joinTeam(rawCode, quiet) {
-      const code = String(rawCode || "").trim().toLowerCase();
-      if (!validTeamCode(code)) { if (!quiet) setStatus("Team codes look like lucky-gnome-k3x9q2."); return; }
-      const fb = await loadFirebase();
-      if (!fb) return;
-      const ref = fb.doc(fb.db, "rooms", code);
-      setTeamStatus("connecting", "Connecting…");
-      let snap;
-      try { snap = await fb.getDoc(ref); }
-      catch (e) { syncError(e); return; }
-      if (!snap.exists()) {
-        setTeamStatus("", "Solo: progress saved in this browser only");
-        setStatus("No team found with that code.");
-        if (quiet) { try { localStorage.removeItem(TEAM_KEY); } catch (e) {} setTeamUrl(null); }
-        return;
+    // "Create team" makes a hard-to-guess random name; "Join team" takes any name.
+    async function createTeam() {
+      const name = makeTeamCode();
+      if (await joinTeam(name)) {
+        setStatus(`Private team "${name}" created. Click 'Copy team link' and send it to your teammates.`);
       }
+    }
+
+    // Opens the team with this name, creating it on your current board if nobody has used the name yet.
+    // quiet = automatic rejoin on page load: never creates a team. Returns "joined", "created" or null.
+    async function joinTeam(rawName, quiet) {
+      const name = normTeamName(rawName);
+      if (!name) { if (!quiet) setStatus("Type a team name first, e.g. team1."); return null; }
+      const fb = await loadFirebase();
+      if (!fb) return null;
+      setTeamStatus("connecting", "Connecting…");
+      let ref, snap;
+      try {
+        // Teams made before team names existed live under their code itself
+        if (validTeamCode(name)) {
+          ref = fb.doc(fb.db, "rooms", name);
+          snap = await fb.getDoc(ref);
+        }
+        if (!snap || !snap.exists()) {
+          ref = fb.doc(fb.db, "rooms", await teamDocId(name));
+          snap = await fb.getDoc(ref);
+        }
+      } catch (e) { syncError(e); return null; }
+      let result = "joined";
+      if (!snap.exists()) {
+        if (quiet) {
+          setTeamStatus("", "Solo: progress saved in this browser only");
+          try { localStorage.removeItem(TEAM_KEY); } catch (e) {}
+          setTeamUrl(null);
+          return null;
+        }
+        // New team: it starts on your current board, keeping any ticks you already have
+        const done = {};
+        state.done.forEach(id => { done[id] = { by: state.doneBy[id] || playerName(), at: fb.serverTimestamp() }; });
+        try { await fb.setDoc(ref, { order: state.order, done, updated: fb.serverTimestamp() }); }
+        catch (e) { syncError(e); return null; }
+        result = "created";
+      }
+      const code = name;
       if (team) team.unsub();
       team = { code, ref, unsub: () => {} };
       team.unsub = fb.onSnapshot(ref, s => {
@@ -1057,6 +1081,13 @@
       try { localStorage.setItem(TEAM_KEY, code); } catch (e) {}
       setTeamUrl(code);
       setTeamStatus("connecting", "Connecting…");
+      document.getElementById("teamCodeInput").value = "";
+      if (!quiet) {
+        setStatus(result === "created"
+          ? `New team "${name}" started on your current board. Teammates join by typing the same name.`
+          : `Joined team "${name}".`);
+      }
+      return result;
     }
 
     function leaveTeam() {
