@@ -91,14 +91,15 @@
     button.ctrl-btn:hover { filter: brightness(1.12); }
     button.ctrl-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 
-    .board-wrap { max-width: 100%; overflow-x: auto; }
+    /* The board fills the screen width up to 780px; tiles, pictures and text scale with it */
+    .board-wrap { width: min(780px, 100%); }
 
     .board {
       display: grid;
-      grid-template-columns: repeat(5, minmax(110px, 148px));
-      gap: 8px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: clamp(4px, 1.4vw, 8px);
       background: var(--panel-bg);
-      padding: 12px;
+      padding: clamp(5px, 1.8vw, 12px);
       border: 3px solid var(--gold-dim);
       border-radius: 10px;
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
@@ -106,11 +107,12 @@
 
     .tile {
       font: inherit;
-      min-height: 125px;
+      min-width: 0;
+      min-height: clamp(64px, 21vw, 125px);
       background: var(--tile-bg);
       border: 2px solid #594a38;
-      border-radius: 7px;
-      padding: 8px 6px;
+      border-radius: clamp(5px, 1.2vw, 7px);
+      padding: clamp(3px, 1vw, 8px) clamp(2px, 0.8vw, 6px);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -131,15 +133,23 @@
 
     .tile-img {
       width: 100%;
-      height: 64px;
+      height: clamp(26px, 8.5vw, 64px);
       object-fit: contain;
-      margin-bottom: 6px;
+      margin-bottom: clamp(2px, 0.8vw, 6px);
       filter: drop-shadow(2px 3px 2px rgba(0, 0, 0, 0.7));
       pointer-events: none;
     }
-    .tile-title { font-size: 0.86rem; font-weight: bold; line-height: 1.2; color: var(--gold); }
+    .tile-title {
+      font-size: clamp(0.5rem, 2.5vw, 0.86rem);
+      font-weight: bold;
+      line-height: 1.15;
+      color: var(--gold);
+      max-width: 100%;
+      overflow-wrap: break-word;
+      hyphens: auto;
+    }
     .tile.completed .tile-title { color: #e8fff0; }
-    .tile-hrs { margin-top: 4px; font-size: 0.68rem; color: var(--ice); opacity: 0.85; }
+    .tile-hrs { margin-top: clamp(1px, 0.6vw, 4px); font-size: clamp(0.52rem, 2.1vw, 0.68rem); color: var(--ice); opacity: 0.85; }
 
     .tile.completed {
       background: var(--tile-done);
@@ -166,7 +176,7 @@
     .tile.free-space { border-style: dashed; cursor: default; }
     .tile.free-space:hover { transform: none; }
     .free-mark {
-      font-size: 2rem;
+      font-size: clamp(1rem, 5.5vw, 2rem);
       font-weight: bold;
       letter-spacing: 2px;
       color: #e8fff0;
@@ -307,8 +317,8 @@
       padding: 4px 7px;
     }
     .team-bar #playerName { width: 120px; }
-    .team-bar #teamCodeInput { width: 170px; }
-    .team-bar .group { display: inline-flex; gap: 6px; align-items: center; }
+    .team-bar #teamCodeInput { width: 170px; max-width: 100%; }
+    .team-bar .group { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px; align-items: center; max-width: 100%; }
     .team-bar .group[hidden] { display: none; }
     .team-status { font-weight: bold; color: var(--text-muted); }
     .team-status .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #777; margin-right: 5px; }
@@ -329,6 +339,19 @@
       white-space: nowrap;
     }
     .tooltip-by { color: #a6f0bd; margin-top: 4px; font-size: 0.74rem; }
+
+    /* Phones */
+    @media (max-width: 520px) {
+      body { padding: 14px 8px 30px; }
+      .tile.completed::after { font-size: 0.7rem; top: 2px; right: 3px; }
+      .tile-by { font-size: 0.55rem; }
+      .team-bar, .controls { padding: 8px 10px; }
+    }
+    /* Touch screens: no hover lift (it sticks after a tap) */
+    @media (hover: none) {
+      .tile:hover { transform: none; background: var(--tile-bg); border-color: #594a38; }
+      .tile.completed:hover { background: var(--tile-done); border-color: var(--tile-done-border); }
+    }
 
     .rules {
       margin-top: 18px;
