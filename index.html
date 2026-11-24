@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OSRS Christmas PvM Bingo</title>
+  <title>OSRS PvM Bingo</title>
   <style>
     :root {
       --bg-dark: #120f0c;
@@ -161,7 +161,16 @@
       box-shadow: inset 0 0 14px rgba(56, 161, 88, 0.45), 0 0 10px rgba(230, 184, 76, 0.55);
     }
 
-    .tile.free-space { border-style: dashed; border-color: var(--gold); }
+    .tile.free-space { border-style: dashed; cursor: default; }
+    .tile.free-space:hover { transform: none; }
+    .free-mark {
+      font-size: 2rem;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: #e8fff0;
+      text-shadow: 2px 2px 0 #000;
+      margin-bottom: 4px;
+    }
 
     .tooltip {
       position: fixed;
@@ -298,6 +307,7 @@
     .team-bar #playerName { width: 120px; }
     .team-bar #teamCodeInput { width: 170px; font-family: Consolas, monospace; }
     .team-bar .group { display: inline-flex; gap: 6px; align-items: center; }
+    .team-bar .group[hidden] { display: none; }
     .team-status { font-weight: bold; color: var(--text-muted); }
     .team-status .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #777; margin-right: 5px; }
     .team-status.live { color: #a6f0bd; }
@@ -330,8 +340,8 @@
 </head>
 <body>
   <header>
-    <h1>OSRS Christmas PvM Bingo</h1>
-    <p class="subtitle">Clan-style PvM &amp; snowy boss drop bingo. Click tiles as drops hit your collection log.</p>
+    <h1>OSRS PvM Bingo</h1>
+    <p class="subtitle">Clan-style PvM &amp; boss drop bingo. Click tiles as drops hit your collection log.</p>
   </header>
 
   <div class="controls">
@@ -394,7 +404,8 @@
   </div>
 
   <p class="rules">
-    Rows, columns and both diagonals count as a bingo. "Any N" tiles accept duplicates.
+    Rows, columns and both diagonals count as a bingo. The centre square is a free space and always counts as complete.
+    "Any N" tiles accept duplicates.
     Hours are expected time at the kill rates in the TempleOSRS kills/hr sheet &times; drop rates; most players will
     take longer, but every row and column is balanced to a similar total.
     Solo progress is saved in this browser. Create or join a team to share one board and its ticks live with your teammates.
@@ -483,7 +494,7 @@
     // off   = left out of the pool by default
     // ---------------------------------------------------------------------------------
     const TILES = [
-      { id: "free",    free: true, img: "Santa_hat", title: "FREE: Snowball Spec", sub: "Equip Santa hat/jumper & get any boss KC" },
+      { id: "free",    free: true, title: "Free space", sub: "Always counts as complete for every line through the centre." },
       { id: "cerb",    img: "Primordial_crystal",           title: "Red & Green Crystals", sub: "Primordial, Pegasian, or Eternal crystal (Cerberus)", from: ["cerberus"], items: ["Primordial crystal", "Pegasian crystal", "Eternal crystal"] },
       { id: "dks",     img: "Berserker_ring",               title: "Lord of the Rings",    sub: "Any 3 Dagannoth King rings", need: 3, from: ["rex", "prime", "supreme"], items: "*" },
       { id: "raid",    img: "Twisted_bow",                  title: "Raid Purple",          sub: "Any CoX, ToB, ToA, or Fractured Archive unique", group: "raid", from: ["cox", "tob", "tfa"], items: "*" },
@@ -713,8 +724,11 @@
       return el;
     }
 
+    // Ticked tiles plus the free centre, which always counts as complete
+    const doneSet = () => new Set([...state.done, FREE_ID]);
+
     function completedLines() {
-      const done = new Set(state.done);
+      const done = doneSet();
       return LINES.filter(line => line.every(pos => done.has(state.order[pos])));
     }
 
@@ -722,7 +736,7 @@
       const board = document.getElementById("board");
       hideTip();
       board.innerHTML = "";
-      const done = new Set(state.done);
+      const done = doneSet();
       const lines = completedLines();
       const inLine = new Set(lines.flat());
 
@@ -735,27 +749,34 @@
           (done.has(id) ? " completed" : "") +
           (inLine.has(pos) ? " in-line" : "");
         btn.setAttribute("aria-pressed", done.has(id));
-        const img = wikiImg(t.img);
-        img.className = "tile-img";
-        btn.appendChild(img);
-        const title = document.createElement("div");
-        title.className = "tile-title";
-        title.textContent = t.title;
-        btn.appendChild(title);
+        if (t.free) {
+          const mark = document.createElement("div");
+          mark.className = "free-mark";
+          mark.textContent = "FREE";
+          btn.appendChild(mark);
+        } else {
+          const img = wikiImg(t.img);
+          img.className = "tile-img";
+          btn.appendChild(img);
+        }
         if (!t.free) {
+          const title = document.createElement("div");
+          title.className = "tile-title";
+          title.textContent = t.title;
+          btn.appendChild(title);
           const hrs = document.createElement("div");
           hrs.className = "tile-hrs";
           hrs.textContent = `≈ ${fmtHrs(INFO[id].hrs)} hrs`;
           btn.appendChild(hrs);
         }
-        if (done.has(id) && state.doneBy[id]) {
+        if (!t.free && done.has(id) && state.doneBy[id]) {
           const by = document.createElement("div");
           by.className = "tile-by";
           by.textContent = state.doneBy[id];
           btn.appendChild(by);
         }
         btn.setAttribute("aria-label", `${t.title}: ${t.sub}`);
-        btn.addEventListener("click", () => toggle(id));
+        if (!t.free) btn.addEventListener("click", () => toggle(id));
         btn.addEventListener("mouseover", () => showTip(btn, t));
         btn.addEventListener("focus", () => showTip(btn, t));
         btn.addEventListener("mouseleave", hideTip);
@@ -767,15 +788,15 @@
       document.getElementById("lineRange").textContent =
         `${Math.min(...sums).toFixed(1)}–${Math.max(...sums).toFixed(1)} hrs`;
 
-      document.getElementById("completedCount").textContent = state.done.length;
+      document.getElementById("completedCount").textContent = done.size;
       document.getElementById("lineCount").textContent = lines.length;
 
       const banner = document.getElementById("bingoBanner");
-      if (state.done.length === 25) {
-        banner.textContent = "BLACKOUT! Every tile complete. Absolute gamer. 🎄";
+      if (done.size === 25) {
+        banner.textContent = "BLACKOUT! Every tile complete. Absolute gamer.";
         banner.hidden = false;
       } else if (lines.length > 0) {
-        banner.textContent = `BINGO! ${lines.length} line${lines.length > 1 ? "s" : ""} complete. 🎁`;
+        banner.textContent = `BINGO! ${lines.length} line${lines.length > 1 ? "s" : ""} complete.`;
         banner.hidden = false;
       } else {
         banner.hidden = true;
@@ -832,7 +853,7 @@
       tip.querySelector(".tooltip-sub").textContent = t.sub;
       tip.querySelector(".tooltip-hrs").textContent = t.free ? "Free space" : `≈ ${fmtHrs(info.hrs)} hrs at efficient rates`;
       tip.querySelector(".tooltip-src").textContent = t.free ? "" : info.note;
-      const by = state.done.includes(t.id) && state.doneBy[t.id];
+      const by = !t.free && state.done.includes(t.id) && state.doneBy[t.id];
       tip.querySelector(".tooltip-by").textContent = by ? `Completed by ${by}` : "";
       tip.hidden = false;
       const r = el.getBoundingClientRect();
@@ -951,8 +972,8 @@
     }
 
     function makeTeamCode() {
-      const adj = ["frosty", "jolly", "snowy", "merry", "icy", "festive", "twinkly", "cozy"];
-      const noun = ["gnome", "imp", "elf", "yeti", "penguin", "reindeer", "snowman", "santa"];
+      const adj = ["swift", "lucky", "mighty", "shiny", "bold", "sneaky", "golden", "brave"];
+      const noun = ["gnome", "imp", "goblin", "dragon", "troll", "wizard", "knight", "yak"];
       const r = crypto.getRandomValues(new Uint32Array(8));
       const tail = Array.from(r.slice(2), n => (n % 36).toString(36)).join("");
       return `${adj[r[0] % adj.length]}-${noun[r[1] % noun.length]}-${tail}`;
@@ -1000,7 +1021,7 @@
 
     async function joinTeam(rawCode, quiet) {
       const code = String(rawCode || "").trim().toLowerCase();
-      if (!validTeamCode(code)) { if (!quiet) setStatus("Team codes look like frosty-gnome-k3x9q2."); return; }
+      if (!validTeamCode(code)) { if (!quiet) setStatus("Team codes look like lucky-gnome-k3x9q2."); return; }
       const fb = await loadFirebase();
       if (!fb) return;
       const ref = fb.doc(fb.db, "rooms", code);
