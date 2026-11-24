@@ -87,6 +87,7 @@
     }
 
     button.ctrl-btn:hover { filter: brightness(1.12); }
+    button.ctrl-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 
     .board-wrap { max-width: 100%; overflow-x: auto; }
 
@@ -270,6 +271,53 @@
     .badge.est { background: #5a4a1c; color: #ffd98a; }
     .badge.on { background: #1d4a2c; color: #a6f0bd; }
 
+    /* ---- Team sync bar ---- */
+    .team-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+      justify-content: center;
+      background: #1b2027;
+      border: 2px solid #3b5a78;
+      border-radius: 8px;
+      padding: 8px 14px;
+      margin-bottom: 16px;
+      max-width: 780px;
+      font-size: 0.85rem;
+    }
+    .team-bar input {
+      font-family: inherit;
+      font-size: 0.82rem;
+      background: #15110d;
+      color: var(--text-main);
+      border: 1px solid var(--gold-dim);
+      border-radius: 5px;
+      padding: 4px 7px;
+    }
+    .team-bar #playerName { width: 120px; }
+    .team-bar #teamCodeInput { width: 170px; font-family: Consolas, monospace; }
+    .team-bar .group { display: inline-flex; gap: 6px; align-items: center; }
+    .team-status { font-weight: bold; color: var(--text-muted); }
+    .team-status .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #777; margin-right: 5px; }
+    .team-status.live { color: #a6f0bd; }
+    .team-status.live .dot { background: #4be07a; box-shadow: 0 0 6px #4be07a; }
+    .team-status.connecting .dot { background: var(--gold); }
+    .team-status.error { color: #ff9b9b; }
+    .team-status.error .dot { background: #e05555; }
+    .team-status code { font-family: Consolas, monospace; color: var(--ice); }
+
+    .tile-by {
+      margin-top: 3px;
+      font-size: 0.66rem;
+      color: #b7ebd0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tooltip-by { color: #a6f0bd; margin-top: 4px; font-size: 0.74rem; }
+
     .rules {
       margin-top: 18px;
       max-width: 780px;
@@ -293,6 +341,20 @@
     <button id="newBoardBtn" class="ctrl-btn green" type="button">New Random Board</button>
     <button id="shuffleBtn" class="ctrl-btn secondary" type="button">Rebalance Layout</button>
     <button id="resetBtn" class="ctrl-btn" type="button">Reset Progress</button>
+  </div>
+
+  <div class="team-bar">
+    <label class="group">Your name <input id="playerName" type="text" maxlength="24" autocomplete="off" placeholder="RSN" /></label>
+    <span class="team-status" id="teamStatus"><span class="dot"></span>Solo: progress saved in this browser only</span>
+    <span class="group" id="teamJoinGroup">
+      <input id="teamCodeInput" type="text" spellcheck="false" autocomplete="off" placeholder="team code" aria-label="Team code" />
+      <button id="joinTeamBtn" class="ctrl-btn secondary" type="button">Join team</button>
+      <button id="createTeamBtn" class="ctrl-btn green" type="button">Create team</button>
+    </span>
+    <span class="group" id="teamInGroup" hidden>
+      <button id="copyTeamBtn" class="ctrl-btn secondary" type="button">Copy team link</button>
+      <button id="leaveTeamBtn" class="ctrl-btn secondary" type="button">Leave team</button>
+    </span>
   </div>
 
   <div class="board-wrap">
@@ -328,16 +390,33 @@
     <div class="tooltip-sub"></div>
     <div class="tooltip-hrs"></div>
     <div class="tooltip-src"></div>
+    <div class="tooltip-by"></div>
   </div>
 
   <p class="rules">
     Rows, columns and both diagonals count as a bingo. "Any N" tiles accept duplicates.
     Hours are expected time at the kill rates in the TempleOSRS kills/hr sheet &times; drop rates; most players will
     take longer, but every row and column is balanced to a similar total.
-    Progress is saved in this browser. Click a completed tile again to unmark it.
+    Solo progress is saved in this browser. Create or join a team to share one board and its ticks live with your teammates.
+    Click a completed tile again to unmark it.
   </p>
 
   <script>
+    // ---------------------------------------------------------------------------------
+    // TEAM SYNC: paste your Firebase web app config here (Firebase console → Project settings
+    // → Your apps → Config). These values are meant to be public; the Firestore rules protect the data.
+    // Leave as null to run solo-only.
+    // ---------------------------------------------------------------------------------
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyD-yNSuOgiPTseF5XnBMdjxs1vEAAxLH0s",
+      authDomain: "osrsbingo-f5c1c.firebaseapp.com",
+      projectId: "osrsbingo-f5c1c",
+      storageBucket: "osrsbingo-f5c1c.firebasestorage.app",
+      messagingSenderId: "710438315166",
+      appId: "1:710438315166:web:d2ea9a50c1cb955b7d078f"
+    };
+    const FIREBASE_VERSION = "10.12.2";
+
     // ---------------------------------------------------------------------------------
     // Boss data. kph = kills (or raids/chests) per hour. Drop rates are per kill.
     // Source: cleaned_boss_kills_per_hour.xlsx (TempleOSRS) unless est: true.
@@ -568,7 +647,8 @@
           let off = Array.isArray(s.off) ? s.off.filter(id => id in TILE_BY_ID) : defaultOff();
           // Pool v2: TFA and Maggot King are now on by default
           if (s.poolVer !== POOL_VER) off = off.filter(id => id !== "tfa" && id !== "maggot");
-          return { order: s.order, done: (s.done || []).filter(id => s.order.includes(id)), off, poolVer: POOL_VER };
+          return { order: s.order, done: (s.done || []).filter(id => s.order.includes(id)), off, poolVer: POOL_VER,
+                   doneBy: s.doneBy && typeof s.doneBy === "object" ? s.doneBy : {} };
         }
         // Carry over a board + progress from the previous version
         const old = JSON.parse(localStorage.getItem(OLD_KEY));
@@ -583,11 +663,18 @@
       return defaultState();
     }
 
+    // state.done = ticked tile ids; state.doneBy = { tileId: "name of who ticked it" }
     let state = loadState();
+    state.doneBy = state.doneBy || {};
+    let soloState = state;   // the browser-only board, kept aside while you're in a team
+    let team = null;         // { code, ref, unsub } while in a team
     saveState();
 
+    // Solo boards are saved in this browser. In a team the board lives in Firestore, so only the pool is saved here.
     function saveState() {
-      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+      if (team) soloState.off = state.off;
+      const s = team ? soloState : state;
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) {}
     }
 
     // Board code: each tile's pool index as 2 base-36 characters, in board order
@@ -660,6 +747,12 @@
           hrs.className = "tile-hrs";
           hrs.textContent = `≈ ${fmtHrs(INFO[id].hrs)} hrs`;
           btn.appendChild(hrs);
+        }
+        if (done.has(id) && state.doneBy[id]) {
+          const by = document.createElement("div");
+          by.className = "tile-by";
+          by.textContent = state.doneBy[id];
+          btn.appendChild(by);
         }
         btn.setAttribute("aria-label", `${t.title}: ${t.sub}`);
         btn.addEventListener("click", () => toggle(id));
@@ -739,6 +832,8 @@
       tip.querySelector(".tooltip-sub").textContent = t.sub;
       tip.querySelector(".tooltip-hrs").textContent = t.free ? "Free space" : `≈ ${fmtHrs(info.hrs)} hrs at efficient rates`;
       tip.querySelector(".tooltip-src").textContent = t.free ? "" : info.note;
+      const by = state.done.includes(t.id) && state.doneBy[t.id];
+      tip.querySelector(".tooltip-by").textContent = by ? `Completed by ${by}` : "";
       tip.hidden = false;
       const r = el.getBoundingClientRect();
       const tr = tip.getBoundingClientRect();
@@ -755,13 +850,219 @@
     // ---------------------------------------------------------------------------------
     // Actions
     // ---------------------------------------------------------------------------------
-    function toggle(id) {
-      const i = state.done.indexOf(id);
-      if (i >= 0) state.done.splice(i, 1);
-      else state.done.push(id);
+    const NAME_KEY = "osrs-xmas-bingo-name";
+    const TEAM_KEY = "osrs-xmas-bingo-team";
+    const nameInput = document.getElementById("playerName");
+    nameInput.value = localStorage.getItem(NAME_KEY) || "";
+    nameInput.addEventListener("change", () => {
+      try { localStorage.setItem(NAME_KEY, nameInput.value.trim().slice(0, 24)); } catch (e) {}
+    });
+    const playerName = () => nameInput.value.trim().slice(0, 24) || "Someone";
+
+    // Every board change goes through these three: solo → saved in this browser,
+    // team → written to Firestore, and the live update re-renders everyone's board (yours instantly).
+    async function setTick(id, on) {
+      if (team) {
+        const fb = await loadFirebase();
+        if (!fb) return;
+        try {
+          await fb.updateDoc(team.ref, {
+            [`done.${id}`]: on ? { by: playerName(), at: fb.serverTimestamp() } : fb.deleteField(),
+            updated: fb.serverTimestamp()
+          });
+        } catch (e) { syncError(e); }
+        return;
+      }
+      state.done = state.done.filter(d => d !== id);
+      delete state.doneBy[id];
+      if (on) { state.done.push(id); if (nameInput.value.trim()) state.doneBy[id] = playerName(); }
       saveState();
       render();
     }
+
+    async function setBoard(order, keepProgress) {
+      if (team) {
+        const fb = await loadFirebase();
+        if (!fb) return false;
+        try {
+          await fb.updateDoc(team.ref, keepProgress
+            ? { order, updated: fb.serverTimestamp() }
+            : { order, done: {}, updated: fb.serverTimestamp() });
+        } catch (e) { syncError(e); return false; }
+        return true;
+      }
+      state.order = order;
+      if (!keepProgress) { state.done = []; state.doneBy = {}; }
+      saveState();
+      render();
+      return true;
+    }
+
+    async function clearProgress() {
+      if (team) {
+        const fb = await loadFirebase();
+        if (!fb) return;
+        try { await fb.updateDoc(team.ref, { done: {}, updated: fb.serverTimestamp() }); }
+        catch (e) { syncError(e); }
+        return;
+      }
+      state.done = [];
+      state.doneBy = {};
+      saveState();
+      render();
+    }
+
+    function toggle(id) {
+      setTick(id, !state.done.includes(id));
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Team sync (Firebase Firestore). One document per team: rooms/<team code>
+    //   { order: [25 tile ids], done: { tileId: { by, at } }, updated }
+    // The team code works like a password: the rules don't allow listing rooms, so only
+    // people who have the code can open that team's board.
+    // ---------------------------------------------------------------------------------
+    let fbPromise = null;
+    function loadFirebase() {
+      if (!FIREBASE_CONFIG) {
+        setStatus("Team sync isn't set up yet: the Firebase config needs adding to the page.");
+        return Promise.resolve(null);
+      }
+      fbPromise = fbPromise || (async () => {
+        const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
+        const appMod = await import(base + "firebase-app.js");
+        const fs = await import(base + "firebase-firestore.js");
+        const db = fs.getFirestore(appMod.initializeApp(FIREBASE_CONFIG));
+        return { db, doc: fs.doc, getDoc: fs.getDoc, setDoc: fs.setDoc, updateDoc: fs.updateDoc,
+                 onSnapshot: fs.onSnapshot, deleteField: fs.deleteField, serverTimestamp: fs.serverTimestamp };
+      })().catch(e => {
+        fbPromise = null;
+        setTeamStatus("error", "Couldn't load team sync");
+        setStatus("Couldn't load team sync: " + (e.message || e));
+        return null;
+      });
+      return fbPromise;
+    }
+
+    function syncError(e) {
+      const msg = e && e.code === "permission-denied" ? "the server refused the change" : (e && (e.code || e.message)) || "unknown error";
+      setTeamStatus("error", "Sync problem");
+      setStatus("Team sync problem: " + msg + ". Try reloading the page.");
+    }
+
+    function makeTeamCode() {
+      const adj = ["frosty", "jolly", "snowy", "merry", "icy", "festive", "twinkly", "cozy"];
+      const noun = ["gnome", "imp", "elf", "yeti", "penguin", "reindeer", "snowman", "santa"];
+      const r = crypto.getRandomValues(new Uint32Array(8));
+      const tail = Array.from(r.slice(2), n => (n % 36).toString(36)).join("");
+      return `${adj[r[0] % adj.length]}-${noun[r[1] % noun.length]}-${tail}`;
+    }
+    const validTeamCode = c => /^[a-z0-9-]{12,40}$/.test(c);
+
+    function setTeamUrl(code) {
+      const url = new URL(location.href);
+      if (code) url.searchParams.set("team", code); else url.searchParams.delete("team");
+      history.replaceState(null, "", url);
+    }
+    const teamLink = code => `${location.origin}${location.pathname}?team=${encodeURIComponent(code)}`;
+
+    function setTeamStatus(kind, text) {
+      const el = document.getElementById("teamStatus");
+      el.className = "team-status" + (kind ? " " + kind : "");
+      el.textContent = "";
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      el.appendChild(dot);
+      el.appendChild(document.createTextNode(text));
+      if (team && kind !== "error") {
+        el.appendChild(document.createTextNode(" · "));
+        const c = document.createElement("code");
+        c.textContent = team.code;
+        el.appendChild(c);
+      }
+      document.getElementById("teamJoinGroup").hidden = !!team;
+      document.getElementById("teamInGroup").hidden = !team;
+    }
+
+    async function createTeam() {
+      const fb = await loadFirebase();
+      if (!fb) return;
+      const code = makeTeamCode();
+      // The new team starts on your current board, keeping any ticks you already have
+      const done = {};
+      state.done.forEach(id => { done[id] = { by: state.doneBy[id] || playerName(), at: fb.serverTimestamp() }; });
+      try {
+        await fb.setDoc(fb.doc(fb.db, "rooms", code), { order: state.order, done, updated: fb.serverTimestamp() });
+      } catch (e) { syncError(e); return; }
+      await joinTeam(code);
+      setStatus("Team created. Click 'Copy team link' and send it to your teammates.");
+    }
+
+    async function joinTeam(rawCode, quiet) {
+      const code = String(rawCode || "").trim().toLowerCase();
+      if (!validTeamCode(code)) { if (!quiet) setStatus("Team codes look like frosty-gnome-k3x9q2."); return; }
+      const fb = await loadFirebase();
+      if (!fb) return;
+      const ref = fb.doc(fb.db, "rooms", code);
+      setTeamStatus("connecting", "Connecting…");
+      let snap;
+      try { snap = await fb.getDoc(ref); }
+      catch (e) { syncError(e); return; }
+      if (!snap.exists()) {
+        setTeamStatus("", "Solo: progress saved in this browser only");
+        setStatus("No team found with that code.");
+        if (quiet) { try { localStorage.removeItem(TEAM_KEY); } catch (e) {} setTeamUrl(null); }
+        return;
+      }
+      if (team) team.unsub();
+      team = { code, ref, unsub: () => {} };
+      team.unsub = fb.onSnapshot(ref, s => {
+        if (!team || team.ref !== ref) return;
+        if (!s.exists()) { setStatus("This team's board was deleted."); leaveTeam(); return; }
+        const d = s.data();
+        if (!validOrder(d.order)) { setTeamStatus("error", "Team board is damaged"); return; }
+        const map = d.done && typeof d.done === "object" ? d.done : {};
+        const ids = Object.keys(map).filter(id => d.order.includes(id));
+        state = {
+          order: d.order,
+          done: ids,
+          doneBy: Object.fromEntries(ids.map(id => [id, String((map[id] && map[id].by) || "").slice(0, 24)])),
+          off: soloState.off,
+          poolVer: POOL_VER
+        };
+        render();
+        setTeamStatus("live", "Team board, live");
+      }, syncError);
+      try { localStorage.setItem(TEAM_KEY, code); } catch (e) {}
+      setTeamUrl(code);
+      setTeamStatus("connecting", "Connecting…");
+    }
+
+    function leaveTeam() {
+      if (team) team.unsub();
+      team = null;
+      state = soloState;
+      try { localStorage.removeItem(TEAM_KEY); } catch (e) {}
+      setTeamUrl(null);
+      render();
+      setTeamStatus("", "Solo: progress saved in this browser only");
+    }
+
+    document.getElementById("createTeamBtn").addEventListener("click", createTeam);
+    document.getElementById("joinTeamBtn").addEventListener("click", () =>
+      joinTeam(document.getElementById("teamCodeInput").value));
+    document.getElementById("teamCodeInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") joinTeam(e.target.value);
+    });
+    document.getElementById("leaveTeamBtn").addEventListener("click", () => {
+      leaveTeam();
+      setStatus("Left the team. You're back on your solo board.");
+    });
+    document.getElementById("copyTeamBtn").addEventListener("click", async () => {
+      const link = teamLink(team.code);
+      try { await navigator.clipboard.writeText(link); setStatus("Team link copied. Only share it with your team."); }
+      catch (e) { setStatus("Team link: " + link); }
+    });
 
     // Two-click confirm for anything that wipes progress
     function confirmButton(btn, needsConfirm, action) {
@@ -790,26 +1091,19 @@
         document.getElementById("pool").open = true;
         return;
       }
-      state.order = balancedOrder(ids, Math.random);
-      state.done = [];
-      saveState();
-      render();
-      setStatus("New board drawn from the tile pool.");
+      setBoard(balancedOrder(ids, Math.random), false).then(ok => {
+        if (ok) setStatus(team ? "New board drawn for the whole team." : "New board drawn from the tile pool.");
+      });
     });
 
     document.getElementById("shuffleBtn").addEventListener("click", () => {
       // Same tiles, new arrangement. Progress is kept (it's tracked per tile).
-      state.order = balancedOrder(state.order.filter(id => id !== FREE_ID), Math.random);
-      saveState();
-      render();
-      setStatus("Layout rebalanced. Your ticked tiles are kept.");
+      setBoard(balancedOrder(state.order.filter(id => id !== FREE_ID), Math.random), true).then(ok => {
+        if (ok) setStatus("Layout rebalanced. Ticked tiles are kept.");
+      });
     });
 
-    confirmButton(document.getElementById("resetBtn"), () => true, () => {
-      state.done = [];
-      saveState();
-      render();
-    });
+    confirmButton(document.getElementById("resetBtn"), () => true, clearProgress);
 
     document.getElementById("copyCodeBtn").addEventListener("click", async () => {
       const code = encodeBoard(state.order);
@@ -820,11 +1114,9 @@
     confirmButton(document.getElementById("loadCodeBtn"), hasProgress, () => {
       const order = decodeBoard(document.getElementById("boardCode").value);
       if (!order) { setStatus("That board code isn't valid."); return; }
-      state.order = order;
-      state.done = [];
-      saveState();
-      render();
-      setStatus("Board loaded from code.");
+      setBoard(order, false).then(ok => {
+        if (ok) setStatus(team ? "Board loaded for the whole team." : "Board loaded from code.");
+      });
     });
 
     document.getElementById("poolAllBtn").addEventListener("click", () => {
@@ -841,6 +1133,19 @@
     });
 
     render();
+
+    // Rejoin a team from the link (?team=...) or from last visit
+    {
+      const fromUrl = new URLSearchParams(location.search).get("team");
+      let saved = null;
+      try { saved = localStorage.getItem(TEAM_KEY); } catch (e) {}
+      if (FIREBASE_CONFIG && (fromUrl || saved)) joinTeam(fromUrl || saved, true);
+      if (!FIREBASE_CONFIG) {
+        document.getElementById("createTeamBtn").disabled = true;
+        document.getElementById("joinTeamBtn").disabled = true;
+        setTeamStatus("", "Solo: team sync not set up yet");
+      }
+    }
   </script>
 </body>
 </html>
