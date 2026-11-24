@@ -389,7 +389,7 @@
     <p class="pool-help">
       <b>New Random Board</b> draws 24 tiles from the enabled pool, then arranges them so every row and column
       takes a similar number of hours. Untick tiles you don't want drawn. Tiles marked <span class="badge est">est.</span>
-      aren't in the kills/hr sheet, so their hours are estimates. Share a board with your clan using the board code below the board.
+      aren't in TempleOSRS's boss rates, so their hours are estimates. Share a board with your clan using the board code below the board.
     </p>
     <div class="pool-actions">
       <button id="poolAllBtn" class="ctrl-btn secondary" type="button">Enable all</button>
@@ -409,7 +409,8 @@
   <p class="rules">
     Rows, columns and both diagonals count as a bingo. The centre square is a free space and always counts as complete.
     "Any N" tiles accept duplicates.
-    Hours are expected time at the kill rates in the TempleOSRS kills/hr sheet &times; drop rates; most players will
+    Hours are expected time at <a class="nav-link" href="https://templeosrs.com/rates/bosses.php?ehp=imehb" target="_blank" rel="noopener">TempleOSRS's Ironman EHB kill rates</a>
+    &times; drop rates; most players will
     take longer, but every row and column is balanced to a similar total.
     Solo progress is saved in this browser. Create or join a team to share one board and its ticks live with your teammates.
     Click a completed tile again to unmark it.
@@ -438,7 +439,7 @@
       const hrs = (t.need || 1) / best.perHour;
       const many = t.from.length > 1 ? `Best at ${best.b.name}, ` : "";
       const unit = best.b.kph < 5 ? " runs/hr" : " kills/hr";
-      const src = best.b.est ? " (estimate)" : best.b.agreed ? " (agreed clan rate)" : " (kills/hr sheet)";
+      const src = best.b.est ? " (estimate)" : best.b.agreed ? " (agreed clan rate)" : best.b.src ? ` (${best.b.src})` : " (TempleOSRS)";
       const note = `${many}${best.b.kph}${unit}${src}`;
       return { hrs, note, est: !!best.b.est };
     }
